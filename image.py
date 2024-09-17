@@ -1,22 +1,18 @@
 import tkinter as tk
 from PIL import Image, ImageTk
-import pyttsx3
+from TTS.api import TTS
+import threading
 
 # Initialize the main window
 root = tk.Tk()
 root.title("Speech Practice Interface")
 root.attributes("-fullscreen", True)
 
-# Initialize pyttsx3 for Text-to-Speech
-tts_engine = pyttsx3.init()
+# Initialize Coqui TTS
+tts = TTS(model_name="tts_models/en/ljspeech/tacotron2-DDC", vocoder_path="vocoder_models/en/ljspeech/hifigan_v2")
 
-# Set the voice to English (America)
-voices = tts_engine.getProperty('voices')
-tts_engine.setProperty('voice', voices[24].id)  # Selecting "English (America)"
-
-# Adjust speed and volume
-tts_engine.setProperty('rate', 150)  # Adjust for slower speech if needed
-tts_engine.setProperty('volume', 1.0)  # Set to maximum volume
+# Lock to prevent speech overlap
+voice_lock = threading.Lock()
 
 # List of image paths and their corresponding texts
 images_data = [
@@ -28,10 +24,19 @@ images_data = [
 # Variable to keep track of the current image index
 current_index = 0
 
-# Function to use pyttsx3 to speak the text
+# Function to use Coqui TTS to speak the text
 def speak_text(text):
-    tts_engine.say(text)
-    tts_engine.runAndWait()
+    with voice_lock:
+        print(f"Speaking: {text}")
+        tts.tts_to_file(text=text, file_path="tts_output.wav")
+        play_audio("tts_output.wav")
+
+# Function to play audio using simpleaudio
+def play_audio(filename):
+    import simpleaudio as sa
+    wave_obj = sa.WaveObject.from_wave_file(filename)
+    play_obj = wave_obj.play()
+    play_obj.wait_done()
 
 # Function to update the displayed image and text
 def update_image():
@@ -53,7 +58,7 @@ def update_image():
     text_label.place(relx=0.5, rely=0.85, anchor=tk.CENTER)
 
     # Delay the speech to ensure the image is displayed first
-    root.after(500, lambda: speak_text(instruction_text))
+    root.after(500, lambda: threading.Thread(target=speak_text, args=(instruction_text,)).start())
 
 # Function to go to the next image
 def next_image():
@@ -92,5 +97,4 @@ update_image()
 
 # Run the Tkinter event loop
 root.mainloop()
-
 
